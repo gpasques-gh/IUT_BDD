@@ -1,4 +1,4 @@
--- EXERCICE 21
+-- EXERCICE 21 VERSION FETCH
 
 DECLARE
 
@@ -36,6 +36,36 @@ BEGIN
         end if;
 
     end loop;
+    CLOSE curs_film;
 
 end;
+
+-- EXERCICE 21 VERSION FOREACH
+DECLARE
+
+    CURSOR curs_film IS
+    SELECT FILM.IDFILM id, TITRE, TRUNC(AVG(NOTE), 2) moyenne, COUNT(EMAIL) notes, ENTREE
+    FROM FILM INNER JOIN NOTATION ON FILM.IDFILM = NOTATION.IDFILM
+    GROUP BY FILM.IDFILM, TITRE, ENTREE;
+
+BEGIN
+    FOR curs IN curs_film LOOP
+
+        DBMS_OUTPUT.PUT_LINE('Titre : ' || curs.id);
+        DBMS_OUTPUT.PUT_LINE('Note moyenne : ' || curs.titre);
+        DBMS_OUTPUT.PUT_LINE('Nombre de personne ayant noté le film : ' || curs.moyenne);
+
+        IF curs.ENTREE > 1000000 THEN
+            DBMS_OUTPUT.PUT_LINE('Entrées : Succès');
+        elsif curs.ENTREE > 500000 and curs.ENTREE < 1000000 then
+            DBMS_OUTPUT.PUT_LINE('Entrées : Très bon');
+        else
+            DBMS_OUTPUT.PUT_LINE('Entrées : Honorable');
+        end if;
+
+    end loop;
+
+end;
+
+
 
