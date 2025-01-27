@@ -67,5 +67,52 @@ BEGIN
 
 end;
 
+-- EXERCICE 22
 
+ALTER TABLE FILM ADD NOTE_MOYENNE NUMBER(4,2);
 
+DECLARE
+    v_note_moyenne FILM.NOTE_MOYENNE%TYPE;
+
+    CURSOR note_curs IS
+    SELECT * FROM FILM
+    FOR UPDATE OF NOTE_MOYENNE;
+
+BEGIN
+    FOR curs IN note_curs LOOP
+        UPDATE FILM set NOTE_MOYENNE = (SELECT TRUNC(AVG(NOTE), 2)
+                                        FROM NOTATION
+                                        WHERE NOTATION.IDFILM = curs.IDFILM
+                                        GROUP BY IDFILM)
+        WHERE current of note_curs;
+    end loop;
+end;
+
+-- EXERCICE 23
+
+ALTER TABLE INTERNAUTE ADD TAUX NUMBER(3,2);
+
+DECLARE
+    v_taux NUMBER(3,2);
+    v_total NUMBER(4,0);
+    v_total_int NUMBER(4,0);
+    CURSOR curs_taux IS
+    SELECT note, internaute.EMAIL, idfilm
+    FROM internaute inner join notation on notation.email = internaute.email
+    FOR UPDATE OF taux;
+
+BEGIN
+
+    SELECT COUNT(NOTE) INTO v_total
+    FROM NOTATION
+    GROUP BY EMAIL
+    HAVING COUNT(NOTE) >= ALL(SELECT COUNT(NOTE) FROM NOTATION GROUP BY EMAIL);
+
+    FOR curs IN curs_taux LOOP
+        SELECT COUNT(NOTE) / v_total INTO v_taux FROM NOTATION
+        WHERE curs.email = notation.email;
+
+        update internaute set taux = v_taux
+        where internaute.email = curs.email;
+    end loop;
+end;
