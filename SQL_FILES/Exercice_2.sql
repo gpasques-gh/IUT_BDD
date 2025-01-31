@@ -116,3 +116,5 @@ BEGIN
         where internaute.email = curs.email;
     end loop;
 end;
+
+SELECT * FROM INTERNAUTE;
