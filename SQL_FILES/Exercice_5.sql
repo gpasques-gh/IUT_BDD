@@ -38,18 +38,22 @@ end;
 
 declare
 begin
-    maj_moy(12);
+    maj_moy(11);
 end;
 
 
 insert into notation values ('germain.pasques@gmail.com', 11, 10, sysdate);
+insert into notation values ('germain.pasques@gmail.com', 12, 10, sysdate);
 
 select * from notation;
 
 -- 5.00
 -- 5.50
 
-select * from film where idfilm = 11;
+-- 5.83
+-- 7.00
+
+select * from film where idfilm = 11 or IDFILM = 12;
 select * from film where idfilm = 12;
 
 
