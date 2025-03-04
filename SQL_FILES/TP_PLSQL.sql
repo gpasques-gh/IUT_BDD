@@ -463,3 +463,356 @@ Vigor
 -- 2.8
 SELECT NumPhoto, Titre, TRUNC((SELECT COUNT(NumPhoto) FROM ACHETE WHERE NumPhoto = P2.NumPhoto)/NbConsult, 2) Ratio
 FROM PHOTO P2;
+
+/* Résultats
+
+ P001,Le palais ducal,0.16
+P002,Voyage au Palais Pitti,0.21
+P003,Les gondoles venitiennes,0.13
+P004,Piazza San Marco,0.16
+P005,planete,0.6
+P006,transport,0.71
+P007,pêche,1
+P008,tradition,0.66
+P009,pacifiste,0.41
+P0010,bibliothèque,1.25
+P0011,monument,0.04
+P0012,bureau,0.55
+P0013,avion,0.42
+P0014,route,0.07
+P0015,voiture,0.33
+P0016,ordinateur,0.03
+P0017,telephone,0.38
+P0018,collection,0.08
+P0019,mer,0.23
+P0020,volcan,0.75
+
+
+ */
+
+ -- 2.9
+SELECT AGENCE.NomAgence
+FROM AGENCE INNER JOIN CONTRAT ON AGENCE.NomAgence = CONTRAT.NomAgence
+            INNER JOIN AUTEUR ON CONTRAT.NumAuteur = AUTEUR.NumAuteur
+            INNER JOIN PHOTO ON AUTEUR.NumAuteur = PHOTO.NumAuteur
+            INNER JOIN ACHETE ON PHOTO.NumPhoto = ACHETE.NumPhoto
+GROUP BY PHOTO.NumPhoto, AGENCE.NomAgence
+HAVING COUNT(ACHETE.NumPhoto) >= ALL (SELECT COUNT(ACHETE.NumPhoto)
+                                      FROM ACHETE
+                                      GROUP BY ACHETE.NumPhoto);
+
+/* Résultats
+
+NomAgence
+
+Synthèse et Médias
+*/
+
+-- PL/SQL
+
+-- 3.1
+
+CREATE OR REPLACE FUNCTION GetMotCle(p_NumPhoto VARCHAR2)
+RETURN VARCHAR2
+IS
+    v_Count NUMBER(1,0);
+    v_MotsCles VARCHAR2(200);
+    v_Erreur EXCEPTION;
+
+    CURSOR v_CursMotsCles(p_NumPhotoCurs VARCHAR2) IS
+        SELECT LibMot
+        FROM MotCle INNER JOIN CORRESPOND ON MotCle.NumMot = CORRESPOND.NumMot
+        WHERE NumPhoto = p_NumPhotoCurs;
+
+BEGIN
+    SELECT COUNT(NumPhoto) INTO v_Count
+    FROM PHOTO
+    WHERE NumPhoto = p_NumPhoto;
+
+    IF v_Count = 0 THEN
+        RAISE v_Erreur;
+    END IF;
+
+    FOR r_Mot IN v_CursMotsCles(p_NumPhoto) LOOP
+        v_MotsCles := v_MotsCles || r_Mot.LibMot || ', ';
+    END LOOP;
+    v_MotsCles := RTRIM(v_MotsCles, ', ');
+
+    RETURN v_MotsCles;
+
+    EXCEPTION
+    WHEN v_Erreur THEN
+        DBMS_OUTPUT.PUT_LINE('Photo inexistante dans la base.');
+        RETURN NULL;
+END;
+
+DECLARE
+    v_MotsCles VARCHAR2(200);
+BEGIN
+    v_MotsCles := GetMotCle('P002');
+    DBMS_OUTPUT.PUT_LINE(v_MotsCles);
+END;
+
+/* Résultats
+Test avec 'P002' :
+
+mer, planete
+
+Test avec 'FAKE' :
+
+Photo inexistante dans la base.
+*/
+
+
+-- 3.2
+
+CREATE OR REPLACE FUNCTION GetAgence(p_NumAuteur VARCHAR2)
+RETURN VARCHAR2
+IS
+    v_Count NUMBER(1,0);
+    v_Erreur EXCEPTION;
+    v_Agence VARCHAR2(250);
+BEGIN
+
+    SELECT COUNT(NumAuteur) INTO v_Count
+    FROM AUTEUR
+    WHERE NumAuteur = p_NumAuteur;
+
+    IF v_Count = 0 THEN
+        RAISE v_Erreur;
+    END IF;
+
+    SELECT COUNT(AGENCE.NomAgence) INTO v_Count
+    FROM AGENCE INNER JOIN CONTRAT ON AGENCE.NomAgence = CONTRAT.NomAgence
+    WHERE NumAuteur = p_NumAuteur;
+
+    IF v_Count = 0 THEN
+        v_Agence := 'Sans objet';
+    ELSE
+        SELECT 'NomAgence : ' || AGENCE.NomAgence || ' | Adresse : ' || Adresse INTO v_Agence
+        FROM AGENCE INNER JOIN CONTRAT ON AGENCE.NomAgence = CONTRAT.NomAgence
+        WHERE NumAuteur = p_NumAuteur;
+    END IF;
+
+    RETURN v_Agence;
+
+    EXCEPTION
+    WHEN v_Erreur THEN
+        DBMS_OUTPUT.PUT_LINE('Auteur inexistant dans la base.');
+        RETURN NULL;
+END;
+
+DECLARE
+    v_Agence VARCHAR2(250);
+BEGIN
+    v_Agence := GetAgence('FAKE');
+    DBMS_OUTPUT.PUT_LINE(v_Agence);
+END;
+
+/* Résultats
+Test avec 'A0001' : NomAgence : Biosphoto | Adresse : 8 rue de la convention 75015 PARIS
+Test avec 'A0006' : Sans objet
+Test avec 'FAKE' : Auteur inexistant dans la base.
+*/
+
+-- 3.3
+
+DECLARE
+    CURSOR v_CursAuteur IS
+    SELECT NomAut, PrenomAut, NumAuteur
+    FROM AUTEUR;
+
+    CURSOR v_CursPhotos(p_NumAuteur VARCHAR2) IS
+    SELECT NumPhoto, Titre, DatePrise, Prix, Pays
+    FROM PHOTO
+    WHERE NumAuteur = p_NumAuteur;
+
+    v_Agence VARCHAR2(250);
+    v_MotsCles VARCHAR2(200);
+    v_Count NUMBER(1,0);
+BEGIN
+    FOR r_Auteur in v_CursAuteur LOOP
+        v_Agence := GetAgence(r_Auteur.NumAuteur);
+        IF v_Agence = 'Sans objet' OR v_Agence IS NULL THEN
+            DBMS_OUTPUT.PUT_LINE(r_Auteur.NomAut || ' ' || r_Auteur.PrenomAut);
+        ELSE
+            DBMS_OUTPUT.PUT_LINE(r_Auteur.NomAut || ' ' || r_Auteur.PrenomAut || ', ' || v_Agence);
+        END IF;
+
+        SELECT COUNT(NumPhoto) INTO v_Count
+        FROM PHOTO
+        WHERE NumAuteur = r_Auteur.NumAuteur;
+
+        IF v_Count > 0 THEN
+            FOR r_Photo in v_CursPhotos(r_Auteur.NumAuteur) LOOP
+                DBMS_OUTPUT.PUT_LINE('  ' || r_Photo.NumPhoto || ', ' || r_Photo.Titre || ', ' || r_Photo.DatePrise || ', ' || r_Photo.Prix || '€, ' || r_Photo.Pays);
+                v_MotsCles := GetMotCle(r_Photo.NumPhoto);
+                DBMS_OUTPUT.PUT_LINE('      ' || v_MotsCles);
+            END LOOP;
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('  Cet auteur n a pas pris de photos.');
+        END IF;
+    END LOOP;
+END;
+
+/* Résultats
+
+Martin Denis, NomAgence : Biosphoto | Adresse : 8 rue de la convention 75015 PARIS
+  P0010, bibliothèque, 14/04/22, 87€, Egypte
+      richesse, culture
+Rivanau Clotilde, NomAgence : OBJECTIF UNE | Adresse : 172 rue Duguesclin 69003 LYON
+  P007, pêche, 03/05/22, 76€, Japon
+      mer, nature
+  P0016, ordinateur, 17/09/22, 9€, France
+      technologie
+Vigard Mathilde
+  P008, tradition, 04/05/22, 98€, Portugal
+      artiste, culture
+  P0017, telephone, 18/09/22, 74€, USA
+      technologie, culture
+  P0019, mer, 16/05/20, 55€, chine
+      planète, nature
+Picard Daniel, NomAgence : Presse Magazine | Adresse : 60 rue Caumartin 75009 PARIS
+  P0011, monument, 23/10/20, 76€, Maroc
+      voyage, culture
+Vanier Jean, NomAgence : Biosphoto | Adresse : 8 rue de la convention 75015 PARIS
+  P005, planete, 22/11/21, 3€, Canada
+      nature, écologie
+  P0014, route, 18/08/19, 5€, Espagne
+      écologie, sport
+Dupars Isabelle
+  P006, transport, 23/11/21, 64€, USA
+      cyclisme, sport
+  P0015, voiture, 19/08/21, 74€, Espagne
+      écologie, sport
+Decours Hélène
+  P009, pacifiste, 05/05/20, 13€, Danemark
+      culture, politique
+  P0018, collection, 15/05/22, 56€, Japon
+      artiste, richesse
+  P0020, volcan, 17/05/19, 22€, Hawaii
+      planète, montagne
+Ledoux Richard, NomAgence : Synthèse et Médias | Adresse : 5 rue Roussin 75015 PARIS
+  P0012, bureau, 16/08/20, 71€, Espagne
+      voyage, politique
+  P0013, avion, 17/08/19, 453€, Espagne
+      écologie, sport
+Davilow Patrick
+  P001, Le palais ducal, 12/01/20, 14€, Italie
+      voyage, artiste
+  P002, Voyage au Palais Pitti, 13/01/20, 34€, Italie
+      mer, planète
+  P003, Les gondoles venitiennes, 14/01/20, 64€, Italie
+      nature, montagne
+  P004, Piazza San Marco, 15/01/20, 123€, Italie
+      artiste, culture
+*/
+
+-- 3.4
+
+CREATE SEQUENCE SqSerie
+START WITH 2
+INCREMENT BY 1;
+
+CREATE SEQUENCE SqPhoto
+START WITH 20
+INCREMENT BY 1;
+
+
+
+CREATE OR REPLACE PROCEDURE AjoutPhoto(p_Poids NUMBER, p_Titre VARCHAR2, p_Date DATE, p_Prix NUMBER, p_Pays VARCHAR2, p_NumAuteur VARCHAR2, p_NomFich VARCHAR2, p_NumSerie NUMBER, p_Error OUT NUMBER)
+IS
+    v_Count NUMBER(1,0);
+    v_ErreurAuteur EXCEPTION;
+    v_ErreurSerie EXCEPTION;
+    v_MaxDansSerie NUMBER(5,0);
+BEGIN
+    p_Error := 0;
+
+    SELECT COUNT(NumAuteur) INTO v_Count
+    FROM AUTEUR
+    WHERE NumAuteur = p_NumAuteur;
+
+    IF v_Count = 0 THEN
+        RAISE v_ErreurAuteur;
+    END IF;
+
+    IF p_NumSerie = -1 THEN
+        INSERT INTO SERIE VALUES (SqSerie.NEXTVAL, 'Nouvelle serie ' || SqSerie.CURRVAL, 'Commentaire');
+        INSERT INTO PHOTO VALUES ('P00' || SqPhoto.NEXTVAL, p_Poids, p_Titre, p_Date, p_Prix, p_Pays, p_NumAuteur, 0, p_NomFich, SqSerie.CURRVAL, 1);
+    ELSIF p_NumSerie = 0 THEN
+        INSERT INTO PHOTO VALUES ('P00' || SqPhoto.NEXTVAL, p_Poids, p_Titre, p_Date, p_Prix, p_Pays, p_NumAuteur, 0, p_NomFich, NULL, 0);
+    ELSE
+        SELECT COUNT(NumSerie) INTO v_Count
+        FROM SERIE
+        WHERE NumSerie = p_NumSerie;
+
+        IF v_Count = 0 THEN
+            RAISE v_ErreurSerie;
+        ELSE
+            SELECT MAX(NumDansSerie) INTO v_MaxDansSerie
+            FROM PHOTO
+            WHERE NumSerie = p_NumSerie;
+        END IF;
+
+        INSERT INTO PHOTO VALUES ('P00' || SqPhoto.NEXTVAL, p_Poids, p_Titre, p_Date, p_Prix, p_Pays, p_NumAuteur, 0, p_NomFich, p_NumSerie, v_MaxDansSerie + 1);
+    END IF;
+
+    EXCEPTION
+    WHEN v_ErreurAuteur THEN
+        DBMS_OUTPUT.PUT_LINE('Erreur : auteur inexistant dans la base.');
+        p_Error := 1;
+    WHEN v_ErreurSerie THEN
+        DBMS_OUTPUT.PUT_LINE('Erreur : série inexistante dans la base.');
+        p_Error := 1;
+    WHEN OTHERS THEN
+        p_Error := 1;
+END;
+
+DECLARE
+    v_Error NUMBER(1,0);
+BEGIN
+    AjoutPhoto(1.5, 'NouvellePhoto', sysdate, 50, 'France', 'A0001', 'NouvellePhoto.jpg', 1, v_Error);
+    DBMS_OUTPUT.PUT_LINE(v_Error);
+end;
+
+/*
+ P0022 1.50 NouvellePhoto 2025-03-04-15:42:58 50.00 France A0001 0 NouvellePhoto.jpg 1 5
+ */
+
+ DECLARE
+    v_Error NUMBER(1,0);
+BEGIN
+    AjoutPhoto(1.5, 'NouvellePhoto2', sysdate, 50, 'France', 'FAKE', 'NouvellePhoto.jpg', 1, v_Error);
+    DBMS_OUTPUT.PUT_LINE(v_Error);
+end;
+
+/*
+ Erreur : auteur inexistant dans la base.
+1
+ */
+
+DECLARE
+    v_Error NUMBER(1,0);
+BEGIN
+    AjoutPhoto(1.5, 'NouvellePhoto3', sysdate, 50, 'France', 'A0001', 'NouvellePhoto.jpg', 0, v_Error);
+    DBMS_OUTPUT.PUT_LINE(v_Error);
+end;
+
+/*
+ P0023,1.50,NouvellePhoto3,2025-03-04 15:46:48,50.00,France,A0001,0,NouvellePhoto.jpg,,0
+ */
+
+ DECLARE
+    v_Error NUMBER(1,0);
+BEGIN
+    AjoutPhoto(1.5, 'NouvellePhoto4', sysdate, 50, 'France', 'A0001', 'NouvellePhoto.jpg', -1, v_Error);
+    DBMS_OUTPUT.PUT_LINE(v_Error);
+end;
+
+/*
+  P0024,1.50,NouvellePhoto4,2025-03-04 15:49:01,50.00,France,A0001,0,NouvellePhoto.jpg,3,1
+*/
+
+
+DELETE FROM PHOTO WHERE TITRE = 'NouvellePhoto';
